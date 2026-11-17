@@ -10,7 +10,7 @@ jobs:
       - name: Requête vers Supabase
         run: |
           curl -fsS -o /dev/null -w "HTTP %{http_code}\n" \
-            -X POST "https://aepjjiiunbkzhhidomgr.supabase.co/rest/v1/rpc/mc_get" \
+            -X POST "https://aepjjiiunbkzhhidomgr.supabase.co/rest/v1/rpc/mc_ping" \
             -H "apikey: sb_publishable_oQwTE9KLNqkjWBtPueejNw_0W47uOIu" \
             -H "Content-Type: application/json" \
-            -d '{"pw":"ping"}' || true
+            -d "{}" || true

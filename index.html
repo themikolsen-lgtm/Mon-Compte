@@ -176,8 +176,15 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
  <div class="acts"><button class="sv" id="save">Sauvegarder</button><button class="rs" id="reset">Reset</button></div>
  <div class="list" id="cloud" style="margin-top:12px;padding:14px">
   <h2 style="margin-bottom:10px">Sauvegarde en ligne</h2>
-  <input class="cin" id="cpw" type="password" placeholder="Mot de passe" autocomplete="off">
-  <div class="acts" style="margin-top:8px"><button class="sv" id="con">Activer</button><button class="rs" id="cget">Récupérer</button></div>
+  <div id="cout">
+   <input class="cin" id="cem" type="email" placeholder="Email" autocomplete="email" autocapitalize="off">
+   <input class="cin" id="cpw" type="password" placeholder="Mot de passe (6 caractères min.)" autocomplete="current-password">
+   <div class="acts"><button class="sv" id="clog">Se connecter</button><button class="rs" id="csign">Créer un compte</button></div>
+  </div>
+  <div id="cin" hidden>
+   <div class="sum" id="cwho" style="margin:0 0 10px;text-align:left"></div>
+   <div class="acts"><button class="sv" id="cget">Récupérer</button><button class="rs" id="cexit">Se déconnecter</button></div>
+  </div>
  </div>
  <div class="sum" id="stor" style="text-align:center;margin:14px 4px 0"></div>
  <div class="ok" id="ok"></div>
@@ -223,13 +230,28 @@ function save(){
 const UKEY="monezia-u",SYNCKEY="monezia-sync";
 let syncReady=false,pushT=null,syncMsg="";
 const SB_URL="https://aepjjiiunbkzhhidomgr.supabase.co",SB_KEY="sb_publishable_oQwTE9KLNqkjWBtPueejNw_0W47uOIu";
-const syncCfg=()=>{try{const c=JSON.parse(localStorage.getItem(SYNCKEY));return c&&c.pw?c:null}catch(e){return null}};
+const AUTHKEY="monezia-auth";
+const syncCfg=()=>{try{const c=JSON.parse(localStorage.getItem(AUTHKEY));return c&&c.refresh?c:null}catch(e){return null}};
+const setAuth=c=>{try{c?localStorage.setItem(AUTHKEY,JSON.stringify(c)):localStorage.removeItem(AUTHKEY)}catch(e){}};
 const localU=()=>{const n=parseInt(localStorage.getItem(UKEY));return isNaN(n)?0:n};
 const fmtT=t=>new Date(t).toLocaleDateString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+const AERR={"Invalid login credentials":"Email ou mot de passe incorrect.","User already registered":"Un compte existe déjà avec cet email.","Email not confirmed":"Confirme d’abord ton email (lien reçu par mail).","Unable to validate email address: invalid format":"Email invalide."};
+async function auth(path,body){
+ const r=await fetch(SB_URL+"/auth/v1/"+path,{method:"POST",headers:{apikey:SB_KEY,"Content-Type":"application/json"},body:JSON.stringify(body)});
+ const j=await r.json().catch(()=>({}));
+ if(!r.ok){const m=j.msg||j.message||j.error_description||j.error||("Erreur "+r.status);throw new Error(AERR[m]||(/least 6/.test(m)?"Mot de passe trop court (6 caractères min.).":m))}
+ return j;
+}
+const toAuth=(j,email)=>({access:j.access_token,refresh:j.refresh_token,exp:Date.now()+(j.expires_in||3600)*1000-60000,email:email||(j.user&&j.user.email)||""});
+async function token(){
+ const c=syncCfg();if(!c)throw new Error("non connecté");
+ if(c.exp>Date.now())return c.access;
+ try{const n=toAuth(await auth("token?grant_type=refresh_token",{refresh_token:c.refresh}),c.email);setAuth(n);return n.access}
+ catch(e){if(!navigator.onLine||/Failed to fetch|Load failed|NetworkError/i.test(e.message))throw e;setAuth(null);syncReady=false;drawAcc();throw new Error("session expirée, reconnecte-toi")}
+}
 async function api(method,body){
- const c=syncCfg();if(!c)throw new Error("non configuré");
- const get=method==="GET";
- const r=await fetch(SB_URL+"/rest/v1/rpc/"+(get?"mc_get":"mc_put"),{method:"POST",headers:{apikey:SB_KEY,"Content-Type":"application/json"},body:JSON.stringify(get?{pw:c.pw}:{pw:c.pw,u:body.u,data:body.data})});
+ const t=await token(),get=method==="GET";
+ const r=await fetch(SB_URL+"/rest/v1/rpc/"+(get?"mc_get2":"mc_put2"),{method:"POST",headers:{apikey:SB_KEY,Authorization:"Bearer "+t,"Content-Type":"application/json"},body:JSON.stringify(get?{}:{u:body.u,data:body.data})});
  const j=await r.json().catch(()=>({}));
  if(!r.ok)throw new Error(j.message||j.error||("Erreur "+r.status));
  return j;
@@ -303,20 +325,29 @@ function hint(){
 const NAV_FIX='Charges fixes <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></svg>',NAV_BACK='<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg> Retour';
 let screen="dep";
 function show(s){screen=s;if(s!=="dep")setHist(false);$("dep").hidden=s!=="dep";$("fix").hidden=s!=="fix";$("hico").hidden=s!=="dep";document.body.classList.toggle("d",s==="dep");$("nav").innerHTML=s==="dep"?NAV_FIX:NAV_BACK;scrollTo(0,0);hideUndo();if(s==="dep")moveThumb()}
-$("con").onclick=async()=>{
- const pw=$("cpw").value;
- if(!pw){syncMsg="Saisis ton mot de passe.";updStor();return}
- localStorage.setItem(SYNCKEY,JSON.stringify({pw}));syncReady=false;syncMsg="Connexion…";updStor();
- await initialSync();
-};
+function drawAcc(){const c=syncCfg();$("cout").hidden=!!c;$("cin").hidden=!c;if(c)$("cwho").innerHTML="Connecté : <b>"+c.email.replace(/</g,"&lt;")+"</b>"}
+async function connect(create){
+ const email=$("cem").value.trim(),pw=$("cpw").value;
+ if(!email||!pw){syncMsg="Saisis ton email et ton mot de passe.";updStor();return}
+ syncMsg=create?"Création du compte…":"Connexion…";updStor();
+ try{
+  let j=await auth(create?"signup":"token?grant_type=password",{email,password:pw});
+  if(!j.access_token){if(create)j=await auth("token?grant_type=password",{email,password:pw});}
+  setAuth(toAuth(j,email))
+ }catch(e){syncMsg=(create&&/Confirme/.test(e.message)?"Compte créé. Confirme ton email puis connecte-toi.":e.message);updStor();return}
+ $("cpw").value="";drawAcc();syncReady=false;await initialSync();
+}
+$("clog").onclick=()=>connect(false);
+$("csign").onclick=()=>connect(true);
+$("cexit").onclick=()=>{if(!confirm("Se déconnecter ? Les données restent sur cet appareil et en ligne."))return;setAuth(null);syncReady=false;clearTimeout(pushT);syncMsg="Déconnecté.";drawAcc();updStor()};
 $("cget").onclick=async()=>{
- if(!syncCfg()){syncMsg="Active d’abord la sauvegarde en ligne.";updStor();return}
+ if(!syncCfg()){syncMsg="Connecte-toi d’abord.";updStor();return}
  try{const r=await api("GET");if(r.empty||!r.data){syncMsg="Rien en ligne pour l’instant.";updStor();return}
   if(confirm("Remplacer les données de cet appareil par la sauvegarde en ligne du "+fmtT(r.u)+" ?")){applyRemote(r);syncReady=true;syncMsg="En ligne · données récupérées ("+fmtT(r.u)+")"}}
  catch(e){syncMsg="Récupération impossible : "+e.message}
  updStor();
 };
-{const c=syncCfg();if(c){$("cpw").value=c.pw;$("con").textContent="Mettre à jour"}}
+drawAcc();
 $("nav").onclick=()=>show(screen==="dep"?"fix":"dep");
 function moveThumb(){const b=[...document.querySelectorAll(".ty")],i=Math.max(0,b.findIndex(x=>x.classList.contains("on")));$("thumb").style.transform="translateX("+i*100+"%)"}
 function selType(t){type=t;document.querySelectorAll(".ty").forEach(x=>x.classList.toggle("on",x.dataset.ty===t));moveThumb();hint()}
