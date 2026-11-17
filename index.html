@@ -176,7 +176,6 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
  <div class="acts"><button class="sv" id="save">Sauvegarder</button><button class="rs" id="reset">Reset</button></div>
  <div class="list" id="cloud" style="margin-top:12px;padding:14px">
   <h2 style="margin-bottom:10px">Sauvegarde en ligne</h2>
-  <input class="cin" id="curl" placeholder="Adresse de la fonction (https://…workers.dev)" autocapitalize="off" autocorrect="off" spellcheck="false">
   <input class="cin" id="cpw" type="password" placeholder="Mot de passe" autocomplete="off">
   <div class="acts" style="margin-top:8px"><button class="sv" id="con">Activer</button><button class="rs" id="cget">Récupérer</button></div>
  </div>
@@ -223,14 +222,16 @@ function save(){
 }
 const UKEY="monezia-u",SYNCKEY="monezia-sync";
 let syncReady=false,pushT=null,syncMsg="";
-const syncCfg=()=>{try{const c=JSON.parse(localStorage.getItem(SYNCKEY));return c&&c.url&&c.pw?c:null}catch(e){return null}};
+const SB_URL="https://aepjjiiunbkzhhidomgr.supabase.co",SB_KEY="sb_publishable_oQwTE9KLNqkjWBtPueejNw_0W47uOIu";
+const syncCfg=()=>{try{const c=JSON.parse(localStorage.getItem(SYNCKEY));return c&&c.pw?c:null}catch(e){return null}};
 const localU=()=>{const n=parseInt(localStorage.getItem(UKEY));return isNaN(n)?0:n};
 const fmtT=t=>new Date(t).toLocaleDateString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
 async function api(method,body){
  const c=syncCfg();if(!c)throw new Error("non configuré");
- const r=await fetch(c.url.replace(/\/+$/,"")+"/data",{method,headers:{Authorization:"Bearer "+c.pw,...(body?{"Content-Type":"application/json"}:{})},body:body?JSON.stringify(body):undefined});
+ const get=method==="GET";
+ const r=await fetch(SB_URL+"/rest/v1/rpc/"+(get?"mc_get":"mc_put"),{method:"POST",headers:{apikey:SB_KEY,"Content-Type":"application/json"},body:JSON.stringify(get?{pw:c.pw}:{pw:c.pw,u:body.u,data:body.data})});
  const j=await r.json().catch(()=>({}));
- if(!r.ok)throw new Error(j.error||("Erreur "+r.status));
+ if(!r.ok)throw new Error(j.message||j.error||("Erreur "+r.status));
  return j;
 }
 function schedulePush(){if(!syncCfg()||!syncReady)return;clearTimeout(pushT);pushT=setTimeout(pushNow,1500)}
@@ -303,9 +304,9 @@ const NAV_FIX='Charges fixes <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r=
 let screen="dep";
 function show(s){screen=s;if(s!=="dep")setHist(false);$("dep").hidden=s!=="dep";$("fix").hidden=s!=="fix";$("hico").hidden=s!=="dep";document.body.classList.toggle("d",s==="dep");$("nav").innerHTML=s==="dep"?NAV_FIX:NAV_BACK;scrollTo(0,0);hideUndo();if(s==="dep")moveThumb()}
 $("con").onclick=async()=>{
- const url=$("curl").value.trim(),pw=$("cpw").value;
- if(!/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:\/])/.test(url)||!pw){syncMsg="Saisis l’adresse (https://…) et le mot de passe.";updStor();return}
- localStorage.setItem(SYNCKEY,JSON.stringify({url,pw}));syncReady=false;syncMsg="Connexion…";updStor();
+ const pw=$("cpw").value;
+ if(!pw){syncMsg="Saisis ton mot de passe.";updStor();return}
+ localStorage.setItem(SYNCKEY,JSON.stringify({pw}));syncReady=false;syncMsg="Connexion…";updStor();
  await initialSync();
 };
 $("cget").onclick=async()=>{
@@ -315,7 +316,7 @@ $("cget").onclick=async()=>{
  catch(e){syncMsg="Récupération impossible : "+e.message}
  updStor();
 };
-{const c=syncCfg();if(c){$("curl").value=c.url;$("cpw").value=c.pw;$("con").textContent="Mettre à jour"}}
+{const c=syncCfg();if(c){$("cpw").value=c.pw;$("con").textContent="Mettre à jour"}}
 $("nav").onclick=()=>show(screen==="dep"?"fix":"dep");
 function moveThumb(){const b=[...document.querySelectorAll(".ty")],i=Math.max(0,b.findIndex(x=>x.classList.contains("on")));$("thumb").style.transform="translateX("+i*100+"%)"}
 function selType(t){type=t;document.querySelectorAll(".ty").forEach(x=>x.classList.toggle("on",x.dataset.ty===t));moveThumb();hint()}
