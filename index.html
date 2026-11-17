@@ -124,6 +124,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 .rs[data-s]{background:#fff;color:#000;border-color:#fff}
 #undo,#note{position:fixed;left:16px;right:16px;max-width:428px;margin:0 auto;bottom:calc(16px + env(safe-area-inset-bottom,0px));background:#fff;color:#000;border-radius:16px;padding:10px 10px 10px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px;font-weight:600;z-index:10;box-shadow:0 8px 30px rgba(0,0,0,.7)}
 #undo button,#note button{border:0;background:#000;color:#fff;border-radius:10px;padding:9px 16px;font:700 13px Inter,sans-serif;cursor:pointer}
+.cin{width:100%;height:44px;border:1px solid var(--line);border-radius:12px;background:var(--soft);color:var(--ink);padding:0 12px;font:500 15px Inter,sans-serif;margin-bottom:8px;outline:none}
 .ok{text-align:center;color:var(--mute);min-height:22px;margin-top:10px;font-size:13px}
 </style>
 </head>
@@ -173,6 +174,12 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   <button class="add" id="addc">+ Ajouter une charge fixe</button>
  </div>
  <div class="acts"><button class="sv" id="save">Sauvegarder</button><button class="rs" id="reset">Reset</button></div>
+ <div class="list" id="cloud" style="margin-top:12px;padding:14px">
+  <h2 style="margin-bottom:10px">Sauvegarde en ligne</h2>
+  <input class="cin" id="curl" placeholder="Adresse de la fonction (https://…workers.dev)" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <input class="cin" id="cpw" type="password" placeholder="Mot de passe" autocomplete="off">
+  <div class="acts" style="margin-top:8px"><button class="sv" id="con">Activer</button><button class="rs" id="cget">Récupérer</button></div>
+ </div>
  <div class="sum" id="stor" style="text-align:center;margin:14px 4px 0"></div>
  <div class="ok" id="ok"></div>
 </section>
@@ -209,8 +216,42 @@ const DECOUVERT=100;
 const eur=n=>(Math.round(n*100)/100).toLocaleString("fr-FR")+" €";
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function save(){
- try{localStorage.setItem(KEY,JSON.stringify(S));saveFailed=false;lastSaveT=Date.now()}catch(e){saveFailed=true}
+ let changed=false;
+ try{const j=JSON.stringify(S);changed=localStorage.getItem(KEY)!==j;localStorage.setItem(KEY,j);saveFailed=false;if(changed||!localStorage.getItem(UKEY))localStorage.setItem(UKEY,String(Date.now()));lastSaveT=Date.now()}catch(e){saveFailed=true}
  try{snap()}catch(e){}
+ if(changed)try{schedulePush()}catch(e){}
+}
+const UKEY="monezia-u",SYNCKEY="monezia-sync";
+let syncReady=false,pushT=null,syncMsg="";
+const syncCfg=()=>{try{const c=JSON.parse(localStorage.getItem(SYNCKEY));return c&&c.url&&c.pw?c:null}catch(e){return null}};
+const localU=()=>{const n=parseInt(localStorage.getItem(UKEY));return isNaN(n)?0:n};
+const fmtT=t=>new Date(t).toLocaleDateString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+async function api(method,body){
+ const c=syncCfg();if(!c)throw new Error("non configuré");
+ const r=await fetch(c.url.replace(/\/+$/,"")+"/data",{method,headers:{Authorization:"Bearer "+c.pw,...(body?{"Content-Type":"application/json"}:{})},body:body?JSON.stringify(body):undefined});
+ const j=await r.json().catch(()=>({}));
+ if(!r.ok)throw new Error(j.error||("Erreur "+r.status));
+ return j;
+}
+function schedulePush(){if(!syncCfg()||!syncReady)return;clearTimeout(pushT);pushT=setTimeout(pushNow,1500)}
+async function pushNow(){
+ try{const u=localU()||Date.now();await api("PUT",{u,data:S});syncMsg="En ligne · envoyé "+fmtT(Date.now())}catch(e){syncMsg="Envoi impossible : "+e.message+" (réessai à la prochaine action)"}
+ updStor();
+}
+function applyRemote(r){S=norm(r.data);try{localStorage.setItem(KEY,JSON.stringify(S));localStorage.setItem(UKEY,String(r.u))}catch(e){}render()}
+async function initialSync(){
+ if(!syncCfg()){updStor();return}
+ try{
+  const r=await api("GET");
+  if(r.empty||!r.data){syncReady=true;await pushNow();return}
+  const lu=localU();
+  if(r.u>lu){
+   if(!lu||confirm("Une version plus récente de tes données est en ligne ("+fmtT(r.u)+").\nLa charger sur cet appareil ?")){applyRemote(r);syncMsg="En ligne · données chargées ("+fmtT(r.u)+")"}
+   else syncMsg="En ligne · version locale conservée"
+   syncReady=true;if(lu&&r.u>lu&&syncMsg.includes("conservée"))await pushNow()
+  }else{syncReady=true;await pushNow()}
+ }catch(e){syncMsg="Hors ligne ou erreur : "+e.message;syncReady=false}
+ updStor();
 }
 function snap(){
  const day=new Date().toISOString().slice(0,10);let a=readSnaps();
@@ -222,7 +263,7 @@ function snap(){
 function updStor(){
  const el=document.getElementById("stor");if(!el)return;
  const f=t=>new Date(t).toLocaleDateString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
- el.innerHTML=saveFailed?"<b>Attention :</b> l’enregistrement est impossible sur cet appareil (navigation privée ?).":"Sauvegarde automatique activée"+(lastSaveT?" · dernière : <b>"+f(lastSaveT)+"</b>":"")+(persisted?" · stockage protégé":"");
+ el.innerHTML=saveFailed?"<b>Attention :</b> l’enregistrement est impossible sur cet appareil (navigation privée ?).":"Sauvegarde automatique activée"+(lastSaveT?" · dernière : <b>"+f(lastSaveT)+"</b>":"")+(persisted?" · stockage protégé":"")+((syncCfg()||syncMsg)?"<br>"+esc(syncMsg||"Sauvegarde en ligne activée"):"");
 }
 const fixTotal=()=>S.charges.reduce((t,c)=>t+(+c.a||0),0);
 const base=()=>S.capital-S.epargne-fixTotal();
@@ -261,6 +302,20 @@ function hint(){
 const NAV_FIX='Charges fixes <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></svg>',NAV_BACK='<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg> Retour';
 let screen="dep";
 function show(s){screen=s;if(s!=="dep")setHist(false);$("dep").hidden=s!=="dep";$("fix").hidden=s!=="fix";$("hico").hidden=s!=="dep";document.body.classList.toggle("d",s==="dep");$("nav").innerHTML=s==="dep"?NAV_FIX:NAV_BACK;scrollTo(0,0);hideUndo();if(s==="dep")moveThumb()}
+$("con").onclick=async()=>{
+ const url=$("curl").value.trim(),pw=$("cpw").value;
+ if(!/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:\/])/.test(url)||!pw){syncMsg="Saisis l’adresse (https://…) et le mot de passe.";updStor();return}
+ localStorage.setItem(SYNCKEY,JSON.stringify({url,pw}));syncReady=false;syncMsg="Connexion…";updStor();
+ await initialSync();
+};
+$("cget").onclick=async()=>{
+ if(!syncCfg()){syncMsg="Active d’abord la sauvegarde en ligne.";updStor();return}
+ try{const r=await api("GET");if(r.empty||!r.data){syncMsg="Rien en ligne pour l’instant.";updStor();return}
+  if(confirm("Remplacer les données de cet appareil par la sauvegarde en ligne du "+fmtT(r.u)+" ?")){applyRemote(r);syncReady=true;syncMsg="En ligne · données récupérées ("+fmtT(r.u)+")"}}
+ catch(e){syncMsg="Récupération impossible : "+e.message}
+ updStor();
+};
+{const c=syncCfg();if(c){$("curl").value=c.url;$("cpw").value=c.pw;$("con").textContent="Mettre à jour"}}
 $("nav").onclick=()=>show(screen==="dep"?"fix":"dep");
 function moveThumb(){const b=[...document.querySelectorAll(".ty")],i=Math.max(0,b.findIndex(x=>x.classList.contains("on")));$("thumb").style.transform="translateX("+i*100+"%)"}
 function selType(t){type=t;document.querySelectorAll(".ty").forEach(x=>x.classList.toggle("on",x.dataset.ty===t));moveThumb();hint()}
@@ -303,7 +358,7 @@ $("reset").onclick=()=>{if(!$("reset").dataset.s){$("reset").dataset.s=1;$("rese
 ["gesturestart","gesturechange","gestureend"].forEach(t=>document.addEventListener(t,e=>e.preventDefault()));
 addEventListener("pagehide",save);
 document.addEventListener("visibilitychange",()=>{if(document.hidden)save()});
-render();show("dep");
+render();show("dep");initialSync();
 if(restoredFrom){const f=new Date(restoredFrom).toLocaleDateString("fr-FR",{day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"});$("note").innerHTML=`<span>Données restaurées depuis la copie du ${f}</span><button id="noteb">OK</button>`;$("note").hidden=false;$("note").onclick=e=>{if(e.target.id==="noteb")$("note").hidden=true};save()}
 </script>
 </body>
