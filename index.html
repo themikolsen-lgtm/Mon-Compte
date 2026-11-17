@@ -183,7 +183,9 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   </div>
   <div id="cin" hidden>
    <div class="sum" id="cwho" style="margin:0 0 10px;text-align:left"></div>
-   <div class="acts"><button class="sv" id="cget">Récupérer</button><button class="rs" id="cexit">Se déconnecter</button></div>
+   <div class="acts"><button class="sv" id="cnow">Sauvegarder maintenant</button><button class="rs" id="chist">Historique</button></div>
+   <div id="hlist" style="margin-top:10px" hidden></div>
+   <div class="acts" style="margin-top:8px"><button class="rs" id="cget">Récupérer</button><button class="rs" id="cexit">Se déconnecter</button></div>
   </div>
  </div>
  <div class="sum" id="stor" style="text-align:center;margin:14px 4px 0"></div>
@@ -249,17 +251,17 @@ async function token(){
  try{const n=toAuth(await auth("token?grant_type=refresh_token",{refresh_token:c.refresh}),c.email);setAuth(n);return n.access}
  catch(e){if(!navigator.onLine||/Failed to fetch|Load failed|NetworkError/i.test(e.message))throw e;setAuth(null);syncReady=false;drawAcc();throw new Error("session expirée, reconnecte-toi")}
 }
-async function api(method,body){
+async function api(method,body,fn,args){
  const t=await token(),get=method==="GET";
- const r=await fetch(SB_URL+"/rest/v1/rpc/"+(get?"mc_get2":"mc_put2"),{method:"POST",headers:{apikey:SB_KEY,Authorization:"Bearer "+t,"Content-Type":"application/json"},body:JSON.stringify(get?{}:{u:body.u,data:body.data})});
+ const r=await fetch(SB_URL+"/rest/v1/rpc/"+(fn||(get?"mc_get2":"mc_put2")),{method:"POST",headers:{apikey:SB_KEY,Authorization:"Bearer "+t,"Content-Type":"application/json"},body:JSON.stringify(args||(get?{}:{u:body.u,data:body.data}))});
  const j=await r.json().catch(()=>({}));
  if(!r.ok)throw new Error(j.message||j.error||("Erreur "+r.status));
  return j;
 }
 function schedulePush(){if(!syncCfg()||!syncReady)return;clearTimeout(pushT);pushT=setTimeout(()=>{pushT=null;pushNow()},1500)}
 const SUKEY="monezia-su",getSU=()=>parseInt(localStorage.getItem(SUKEY))||0,setSU=n=>{try{localStorage.setItem(SUKEY,String(n))}catch(e){}};
-async function pushNow(){
- try{const u=localU()||Date.now();await api("PUT",{u,data:S});setSU(u);syncMsg="En ligne · envoyé "+fmtT(Date.now())}catch(e){syncMsg="Envoi impossible : "+e.message+" (réessai à la prochaine action)"}
+async function pushNow(force){
+ try{const u=localU()||Date.now();await api("PUT",{u,data:S},"mc_put2",{u,data:S,force:force===true});setSU(u);syncMsg="En ligne · envoyé "+fmtT(Date.now())}catch(e){syncMsg="Envoi impossible : "+e.message+" (réessai à la prochaine action)"}
  updStor();
 }
 function applyRemote(r){S=norm(r.data);try{localStorage.setItem(KEY,JSON.stringify(S));localStorage.setItem(UKEY,String(r.u))}catch(e){}setSU(r.u);render()}
@@ -349,6 +351,27 @@ async function connect(create){
  }catch(e){syncMsg=(create&&/Confirme/.test(e.message)?"Compte créé. Confirme ton email puis connecte-toi.":e.message);updStor();return}
  $("cpw").value="";drawAcc();syncReady=false;await initialSync();
 }
+$("cnow").onclick=async()=>{syncMsg="Sauvegarde…";updStor();await pushNow(true)};
+$("chist").onclick=async()=>{
+ const box=$("hlist");if(!box.hidden){box.hidden=true;return}
+ box.hidden=false;box.innerHTML='<div class="sum" style="margin:0">Chargement…</div>';
+ try{
+  const a=await api("POST",null,"mc_hist",{});
+  if(!a.length){box.innerHTML='<div class="sum" style="margin:0">Aucune sauvegarde pour l’instant.</div>';return}
+  box.innerHTML=a.map(x=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-top:1px solid var(--line);font-size:14px"><span>${fmtT(x.t)}<br><span style="opacity:.6;font-size:12px">${x.n} dépense${x.n>1?"s":""}</span></span><button class="rs" data-rest="${x.id}" style="flex:none;min-width:96px">Restaurer</button></div>`).join("");
+ }catch(e){box.innerHTML='<div class="sum" style="margin:0">Erreur : '+String(e.message).replace(/</g,"&lt;")+'</div>'}
+};
+$("hlist").onclick=async e=>{
+ const id=e.target.dataset&&e.target.dataset.rest;if(!id)return;
+ if(!confirm("Restaurer cette sauvegarde ? Les données actuelles sont conservées dans l’historique."))return;
+ try{
+  await pushNow(true);
+  const r=await api("POST",null,"mc_hist_get",{hid:+id});
+  applyRemote({u:Date.now(),data:r.data});await pushNow(true);syncMsg="Sauvegarde restaurée · "+fmtT(Date.now());
+  $("hlist").hidden=true
+ }catch(x){syncMsg="Restauration impossible : "+x.message}
+ updStor();
+};
 $("clog").onclick=()=>connect(false);
 $("csign").onclick=()=>connect(true);
 $("cexit").onclick=()=>{if(!confirm("Se déconnecter ? Les données restent sur cet appareil et en ligne."))return;setAuth(null);setSU(0);syncReady=false;clearTimeout(pushT);syncMsg="Déconnecté.";drawAcc();updStor()};
