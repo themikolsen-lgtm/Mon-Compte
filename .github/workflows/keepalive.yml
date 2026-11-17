@@ -1,0 +1,16 @@
+name: Garder Supabase actif
+on:
+  schedule:
+    - cron: "17 6 */3 * *"
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Requête vers Supabase
+        run: |
+          curl -fsS -o /dev/null -w "HTTP %{http_code}\n" \
+            -X POST "https://aepjjiiunbkzhhidomgr.supabase.co/rest/v1/rpc/mc_get" \
+            -H "apikey: sb_publishable_oQwTE9KLNqkjWBtPueejNw_0W47uOIu" \
+            -H "Content-Type: application/json" \
+            -d '{"pw":"ping"}' || true
