@@ -336,7 +336,7 @@ function hint(){
  if(ENV[type]){const e=envState(type),N=NAME[type];if(!e.tot)h.innerHTML=`Reste disponible : <b>${eur(reste()-v)}</b>`;else{const cov=Math.min(v,e.left),over=v-cov;h.innerHTML=over>0?`${N} vide · budget reste <b>${eur(reste()-over)}</b>`:`${N} : reste <b>${eur(e.left-cov)}</b>`}}
  else h.innerHTML=`Déduit du budget · reste <b>${eur(reste()-v)}</b>`;
 }
-const NAV_FIX='Charges fixes <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></svg>',NAV_BACK='<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg> Retour';
+const NAV_FIX='Charges fixes',NAV_BACK='<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg> Retour';
 let screen="dep";
 function show(s){screen=s;if(s!=="dep")setHist(false);$("dep").hidden=s!=="dep";$("fix").hidden=s!=="fix";$("hico").hidden=s!=="dep";document.body.classList.toggle("d",s==="dep");$("nav").innerHTML=s==="dep"?NAV_FIX:NAV_BACK;scrollTo(0,0);hideUndo();if(s==="dep")moveThumb()}
 function drawAcc(){const c=syncCfg();$("cout").hidden=!!c;$("cin").hidden=!c;if(c)$("cwho").innerHTML="Connecté : <b>"+c.email.replace(/</g,"&lt;")+"</b>"}
