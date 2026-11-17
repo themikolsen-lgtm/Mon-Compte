@@ -39,6 +39,9 @@ header{display:flex;align-items:center;justify-content:space-between;gap:8px;pad
 .ib svg,.pill svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 
 #dep:not([hidden]){flex:1;display:flex;flex-direction:column;min-height:0}
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.acc{display:flex;gap:6px;align-items:center;border:1px solid var(--line);background:var(--soft);color:var(--mute);border-radius:999px;padding:5px 12px;font:500 12.5px Inter,sans-serif;cursor:pointer;white-space:nowrap}
+.acc b{color:var(--ink);font-weight:700}
 .hero{flex:none;background:var(--card);border-radius:24px;padding:16px 18px}
 .big{font-size:clamp(36px,6.4vh,56px);font-weight:700;letter-spacing:-.05em;line-height:1.05;margin:4px 0 12px}
 .bar{height:6px;border-radius:6px;background:var(--soft);overflow:hidden}
@@ -133,7 +136,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 
 <section id="dep">
  <div class="hero">
-  <h2>Reste ce mois</h2>
+  <div class="top"><h2>Reste ce mois</h2><button class="acc" id="acc" aria-label="Solde du compte, toucher pour modifier">Compte <b id="accv">102 €</b></button></div>
   <div class="big" id="reste">0 €</div>
   <div class="bar"><i id="bar"></i></div>
   <div class="meta"><span>Utilisé <b id="spent">0 €</b></span><span>Base <b id="base">0 €</b></span></div>
@@ -181,9 +184,9 @@ const KEY="monezia-v1";
 const def={capital:1764,epargne:250,charges:[[1,"Coiffeur",25],[3,"Virement",470],[4,"Apple Music",17],[5,"Assurance Auto",115],[5,"Mutuelle",55],[6,"Plein",200],[8,"Apple stockage",3],[10,"Forfait ligne perso / ligne pro",12],[10,"Crédit Voiture",0],[16,"Banque",12],[28,"Netflix",8],[30,"Suno",10]].map(c=>({d:c[0],n:c[1],a:c[2],done:false})),dep:[]};
 function norm(s){
  const d=JSON.parse(JSON.stringify(def));
- if(!s||typeof s!=="object")return Object.assign(d,{archive:[],mig:1});
+ if(!s||typeof s!=="object")return Object.assign(d,{archive:[],mig:1,compte:102});
  const n=(v,f)=>isNaN(parseFloat(v))?f:parseFloat(v);
- const o={capital:n(s.capital,d.capital),epargne:n(s.epargne,d.epargne),charges:Array.isArray(s.charges)?s.charges:d.charges,dep:Array.isArray(s.dep)?s.dep:[],archive:Array.isArray(s.archive)?s.archive:[],mig:1};
+ const o={capital:n(s.capital,d.capital),epargne:n(s.epargne,d.epargne),charges:Array.isArray(s.charges)?s.charges:d.charges,dep:Array.isArray(s.dep)?s.dep:[],archive:Array.isArray(s.archive)?s.archive:[],mig:1,compte:n(s.compte,102)};
  if(!(s.mig>=1)&&!o.charges.some(c=>/plein|carburant|essence/i.test(c.n||""))){const k=o.charges.findIndex(c=>(+c.d||0)>6);o.charges.splice(k<0?o.charges.length:k,0,{d:6,n:"Plein",a:200,done:false})}
  return o;
 }
@@ -236,7 +239,7 @@ function envNote(c,i){
 }
 function render(){
  const b=base(),r=reste(),sp=spent(),p=b>0?Math.max(0,Math.min(1,r/b)):0;
- $("base").textContent=eur(b);$("reste").textContent=eur(r);$("spent").textContent=eur(sp);
+ $("accv").textContent=eur(S.compte);$("base").textContent=eur(b);$("reste").textContent=eur(r);$("spent").textContent=eur(sp);
  $("bar").style.width=(p*100)+"%";$("bar").classList.toggle("low",p<.1);
  $("sum").innerHTML=`<b>${eur(b)}</b> de base = ${eur(S.capital)} − ${eur(S.epargne)} − ${eur(fixTotal())} de charges`;
  $("envs").innerHTML=["essence","coiffeur"].map(t=>{const e=envState(t);return `<button class="chip${!e.tot||e.left<=0?" zero":""}" data-ty2="${t}">${NAME[t]}<b>${!e.tot?"—":e.left<=0?"épuisé":eur(e.left)}</b></button>`}).join("");
@@ -257,6 +260,7 @@ function hint(){
 const NAV_FIX='Charges fixes <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></svg>',NAV_BACK='<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg> Retour';
 let screen="dep";
 function show(s){screen=s;if(s!=="dep")setHist(false);$("dep").hidden=s!=="dep";$("fix").hidden=s!=="fix";$("hico").hidden=s!=="dep";document.body.classList.toggle("d",s==="dep");$("nav").innerHTML=s==="dep"?NAV_FIX:NAV_BACK;scrollTo(0,0);hideUndo();if(s==="dep")moveThumb()}
+$("acc").onclick=()=>{const v=prompt("Solde actuel du compte (€)",S.compte);if(v===null)return;const n=parseFloat(String(v).replace(",","."));if(isNaN(n))return;S.compte=n;save();render()};
 $("nav").onclick=()=>show(screen==="dep"?"fix":"dep");
 function moveThumb(){const b=[...document.querySelectorAll(".ty")],i=Math.max(0,b.findIndex(x=>x.classList.contains("on")));$("thumb").style.transform="translateX("+i*100+"%)"}
 function selType(t){type=t;document.querySelectorAll(".ty").forEach(x=>x.classList.toggle("on",x.dataset.ty===t));moveThumb();hint()}
