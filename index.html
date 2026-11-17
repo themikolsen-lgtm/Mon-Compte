@@ -189,6 +189,8 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   </div>
  </div>
  <div class="sum" id="stor" style="text-align:center;margin:14px 4px 0"></div>
+ <div class="acts" style="margin-top:12px"><button class="rs" id="cclr">Vider le cache et recharger</button></div>
+ <div class="sum" style="text-align:center;margin:8px 4px 0;font-size:12px;opacity:.6">Tes données ne sont pas effacées : seule la mémoire de l’appli est vidée pour charger la dernière version.</div>
  <div class="ok" id="ok"></div>
 </section>
 <div id="undo" hidden></div>
@@ -371,6 +373,11 @@ $("hlist").onclick=async e=>{
   $("hlist").hidden=true
  }catch(x){syncMsg="Restauration impossible : "+x.message}
  updStor();
+};
+$("cclr").onclick=async()=>{
+ try{if(window.caches){for(const k of await caches.keys())await caches.delete(k)}}catch(e){}
+ try{if(navigator.serviceWorker){for(const r of await navigator.serviceWorker.getRegistrations())await r.unregister()}}catch(e){}
+ location.replace(location.pathname+"?r="+Date.now());
 };
 $("clog").onclick=()=>connect(false);
 $("csign").onclick=()=>connect(true);
