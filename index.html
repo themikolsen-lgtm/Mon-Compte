@@ -152,7 +152,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   </div>
   <div class="amtrow"><button class="back" id="back" aria-label="Retour : effacer le dernier chiffre"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button><input id="amt" type="text" inputmode="none" readonly placeholder="0" aria-label="Montant en euros"><span>€</span></div>
   <div class="hint" id="hint"></div>
-  <div class="keys"><button class="k" data-k="1">1</button><button class="k" data-k="2">2</button><button class="k" data-k="3">3</button><button class="k" data-k="4">4</button><button class="k" data-k="5">5</button><button class="k" data-k="6">6</button><button class="k" data-k="7">7</button><button class="k" data-k="8">8</button><button class="k" data-k="9">9</button><button class="k" data-k=",">,</button><button class="k" data-k="0">0</button><button class="k" data-k="b" aria-label="Effacer">⌫</button></div>
+  <div class="keys"><button class="k" data-k="1">1</button><button class="k" data-k="2">2</button><button class="k" data-k="3">3</button><button class="k" data-k="4">4</button><button class="k" data-k="5">5</button><button class="k" data-k="6">6</button><button class="k" data-k="7">7</button><button class="k" data-k="8">8</button><button class="k" data-k="9">9</button><button class="k" data-k="m" aria-label="Moins (remboursement)">−</button><button class="k" data-k="0">0</button><button class="k" data-k="b" aria-label="Effacer">⌫</button></div>
  </div>
 
  <div class="hist" id="hcard" hidden>
@@ -326,16 +326,17 @@ function render(){
  $("envs").innerHTML=["essence","coiffeur"].map(t=>{const e=envState(t);return `<button class="chip${!e.tot||e.left<=0?" zero":""}" data-ty2="${t}">${NAME[t]}<b>${!e.tot?"—":e.left<=0?"épuisé":eur(e.left)}</b></button>`}).join("");
  $("cap").value=S.capital;$("epa").value=S.epargne;[$("cap"),$("epa")].forEach(i=>i.style.width=(String(i.value).length+.5)+"ch");
  $("tb").innerHTML=S.charges.map((c,i)=>`<div class="cr"><input class="d" data-i="${i}" data-f="d" type="number" inputmode="numeric" value="${c.d}" aria-label="Jour"><div><input data-i="${i}" data-f="n" value="${esc(c.n)}" aria-label="Nom">${envNote(c,i)}</div><div class="eu"><input data-i="${i}" data-f="a" type="number" inputmode="decimal" value="${c.a}" style="width:${Math.max(2,String(c.a).length)+.4}ch" aria-label="Montant"><span>€</span></div><button class="x" data-del="${i}" aria-label="Supprimer">×</button></div>`).join("");
- const envE={essence:envState("essence"),coiffeur:envState("coiffeur")},envLabel=d=>{const E=envE[d.type];if(!E||!E.tot)return"";const r=E.rows[d.id],N=NAME[d.type];return r.over<=0?" · pris sur "+N:r.from>0?" · "+eur(r.from)+" sur "+N+", "+eur(r.over)+" du budget":" · "+N+" épuisé, du budget"};
+ const envE={essence:envState("essence"),coiffeur:envState("coiffeur")},envLabel=d=>{if(d.a<0)return" · remboursement";const E=envE[d.type];if(!E||!E.tot)return"";const r=E.rows[d.id],N=NAME[d.type];return r.over<=0?" · pris sur "+N:r.from>0?" · "+eur(r.from)+" sur "+N+", "+eur(r.over)+" du budget":" · "+N+" épuisé, du budget"};
  const L={panier:"Panier",coiffeur:"Coiffeur",essence:"Essence"};
- $("hist").innerHTML=S.dep.length?S.dep.slice().reverse().map(d=>`<div class="row"><div>${L[d.type]}<small>${d.date}${envLabel(d)}</small></div><div>−${eur(d.a)}<button class="x" data-rm="${d.id}" aria-label="Supprimer">×</button></div></div>`).join(""):'<p style="color:var(--mute);font-size:14px;margin:14px 2px">Aucune dépense pour l’instant.</p>';
+ $("hist").innerHTML=S.dep.length?S.dep.slice().reverse().map(d=>`<div class="row"><div>${L[d.type]}<small>${d.date}${envLabel(d)}</small></div><div>${d.a<0?"+"+eur(-d.a):"−"+eur(d.a)}<button class="x" data-rm="${d.id}" aria-label="Supprimer">×</button></div></div>`).join(""):'<p style="color:var(--mute);font-size:14px;margin:14px 2px">Aucune dépense pour l’instant.</p>';
  $("arch").innerHTML=S.archive.length?'<h2 style="margin:22px 0 2px">Mois précédents</h2>'+S.archive.slice().reverse().map(m=>`<div class="row"><div>${esc(m.label)}<small>${m.n} dépense${m.n>1?"s":""}</small></div><div style="text-align:right">−${eur(m.spent)}<small>sur ${eur(m.base)}</small></div></div>`).join(""):"";
  updStor();
  hint();
 }
 function hint(){
  const v=parseFloat($("amt").value)||0,h=$("hint");
- if(ENV[type]){const e=envState(type),N=NAME[type];if(!e.tot)h.innerHTML=`Reste disponible : <b>${eur(reste()-v)}</b>`;else{const cov=Math.min(v,e.left),over=v-cov;h.innerHTML=over>0?`${N} vide · budget reste <b>${eur(reste()-over)}</b>`:`${N} : reste <b>${eur(e.left-cov)}</b>`}}
+ if(v<0)h.innerHTML=`Remboursement · reste <b>${eur(reste()-v)}</b>`;
+ else if(ENV[type]){const e=envState(type),N=NAME[type];if(!e.tot)h.innerHTML=`Reste disponible : <b>${eur(reste()-v)}</b>`;else{const cov=Math.min(v,e.left),over=v-cov;h.innerHTML=over>0?`${N} vide · budget reste <b>${eur(reste()-over)}</b>`:`${N} : reste <b>${eur(e.left-cov)}</b>`}}
  else h.innerHTML=`Déduit du budget · reste <b>${eur(reste()-v)}</b>`;
 }
 const NAV_FIX='Charges fixes',NAV_BACK='<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg> Retour';
@@ -395,11 +396,11 @@ function moveThumb(){const b=[...document.querySelectorAll(".ty")],i=Math.max(0,
 function selType(t){type=t;document.querySelectorAll(".ty").forEach(x=>x.classList.toggle("on",x.dataset.ty===t));moveThumb();hint()}
 document.querySelectorAll(".ty").forEach(t=>t.onclick=()=>selType(t.dataset.ty));
 $("envs").onclick=e=>{const c=e.target.closest(".chip");if(c){setHist(false);selType(c.dataset.ty2)}};
-document.querySelectorAll(".k").forEach(k=>k.onclick=()=>{const a=$("amt");let v=a.value;const d=k.dataset.k;if(d==="b")v=v.slice(0,-1);else if(d===","){if(v&&!v.includes("."))v+="."}else if(v.length<7)v+=d;a.value=v;hint()});
+document.querySelectorAll(".k").forEach(k=>k.onclick=()=>{const a=$("amt");let v=a.value;const d=k.dataset.k;if(d==="b")v=v.slice(0,-1);else if(d==="m"){v=v.startsWith("-")?v.slice(1):"-"+v}else if(v.replace("-","").length<7)v+=d;a.value=v;hint()});
 $("go").onclick=()=>{
  if(!$("hcard").hidden){setHist(false);return}
  const a=parseFloat($("amt").value);
- if(!(a>=0)||isNaN(a)){$("hint").textContent="Saisis un montant pour l’ajouter.";return}
+ if(isNaN(a)){$("hint").textContent="Saisis un montant pour l’ajouter.";return}
  S.dep.push({id:Date.now(),type,a,date:new Date().toLocaleDateString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})});
  $("amt").value="";
  save();render();
