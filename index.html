@@ -180,6 +180,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
    <input class="cin" id="cem" type="email" placeholder="Email" autocomplete="email" autocapitalize="off">
    <input class="cin" id="cpw" type="password" placeholder="Mot de passe (6 caractères min.)" autocomplete="current-password">
    <div class="acts"><button class="sv" id="clog">Se connecter</button><button class="rs" id="csign">Créer un compte</button></div>
+   <div class="acts" style="margin-top:8px"><button class="rs" id="cgoo">Continuer avec Google</button></div>
   </div>
   <div id="cin" hidden>
    <div class="sum" id="cwho" style="margin:0 0 10px;text-align:left"></div>
@@ -380,6 +381,7 @@ $("cclr").onclick=async()=>{
  try{if(navigator.serviceWorker){for(const r of await navigator.serviceWorker.getRegistrations())await r.unregister()}}catch(e){}
  location.replace(location.pathname+"?r="+Date.now());
 };
+$("cgoo").onclick=()=>{location.href=SB_URL+"/auth/v1/authorize?provider=google&redirect_to="+encodeURIComponent(location.origin+location.pathname)};
 $("clog").onclick=()=>connect(false);
 $("csign").onclick=()=>connect(true);
 $("cexit").onclick=()=>{if(!confirm("Se déconnecter ? Les données restent sur cet appareil et en ligne."))return;setAuth(null);setSU(0);syncReady=false;clearTimeout(pushT);syncMsg="Déconnecté.";drawAcc();updStor()};
@@ -390,6 +392,16 @@ $("cget").onclick=async()=>{
  catch(e){syncMsg="Récupération impossible : "+e.message}
  updStor();
 };
+(()=>{
+ const h=location.hash;if(!/access_token=|error_description=/.test(h))return;
+ const q=new URLSearchParams(h.slice(1));
+ try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}
+ if(q.get("access_token")&&q.get("refresh_token")){
+  let em="";try{em=JSON.parse(atob(q.get("access_token").split(".")[1].replace(/-/g,"+").replace(/_/g,"/"))).email||""}catch(e){}
+  setAuth({access:q.get("access_token"),refresh:q.get("refresh_token"),exp:Date.now()+(+q.get("expires_in")||3600)*1000-60000,email:em});
+  syncMsg="Connecté avec Google.";
+ }else syncMsg="Connexion Google impossible : "+(q.get("error_description")||"erreur").replace(/\+/g," ");
+})();
 drawAcc();
 $("nav").onclick=()=>show(screen==="dep"?"fix":"dep");
 function moveThumb(){const b=[...document.querySelectorAll(".ty")],i=Math.max(0,b.findIndex(x=>x.classList.contains("on")));$("thumb").style.transform="translateX("+i*100+"%)"}
